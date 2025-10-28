@@ -1,0 +1,86 @@
+<mule xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
+<flow name="Updated-implFlow" doc:id="0122d6a7-c28a-410d-b187-872497ea0745">
+<http:listener doc:name="Listener" doc:id="afb7aaf7-db88-43e5-863f-f183bfad3189" config-ref="HTTP_Listener_config" path="/all"/>
+<ee:transform doc:name="Transform Message" doc:id="f4039d1a-92e9-474f-b2e6-569923280a5d">
+<ee:message> </ee:message>
+<ee:variables>
+<ee:set-variable variableName="pageNo">
+<![CDATA[ %dw 2.0 output application/java --- 1 to 3 ]]>
+</ee:set-variable>
+<ee:set-variable variableName="failedRecords">
+<![CDATA[ %dw 2.0 output application/json --- [] ]]>
+</ee:set-variable>
+<ee:set-variable variableName="orderDetails">
+<![CDATA[ %dw 2.0 output application/json --- [] ]]>
+</ee:set-variable>
+</ee:variables>
+</ee:transform>
+<foreach doc:name="For Each" doc:id="33b253d6-bb19-4380-9b94-e0bec7c41a8a" collection="#[vars.pageNo]">
+<set-variable value="#[payload]" doc:name="Set Variable" doc:id="693c5185-1463-4984-a830-e7673d5e4ccf" variableName="currPage"/>
+<http:request method="GET" doc:name="Call Cin7 API" doc:id="2274ec86-84cd-45f1-af3d-97801d0bd22b" config-ref="Cin7_Request_Config" path="/ExternalApi/v2/saleList">
+<http:headers>
+<![CDATA[ #[output application/java --- { "api-auth-applicationkey" : "7120bd3a-1928-2ee2-dbd2-ff6793c044a2", "api-auth-accountid" : "74aa0c83-d31a-49c1-b090-1eeb0a429545", "Content-Type" : "application/json" }] ]]>
+</http:headers>
+<http:query-params>
+<![CDATA[ #[output application/java --- { limit : "300", page : vars.currPage }] ]]>
+</http:query-params>
+</http:request>
+<choice doc:name="Choice" doc:id="221c5291-1995-4ae1-ad8e-2c80e567ba41">
+<when expression="#[sizeOf(payload.SaleList) > 0]">
+<foreach doc:name="For Each" doc:id="1b7676bb-f108-4514-aab5-8b8cbae8a158" collection="#[payload.SaleList]">
+<try doc:name="Try1" doc:id="6bfa599f-6838-4f59-b185-6400ce544c7a">
+<http:request method="GET" doc:name="Request" doc:id="02a359c7-1ca1-474f-b676-f450d7054f48" config-ref="Cin7_Request_Config" path="/ExternalApi/v2/sale" responseTimeout="30000" target="responsePayload">
+<http:headers>
+<![CDATA[ #[output application/java --- { "api-auth-applicationkey" : "7120bd3a-1928-2ee2-dbd2-ff6793c044a2", "api-auth-accountid" : "74aa0c83-d31a-49c1-b090-1eeb0a429545", "Content-Type" : "application/json" }] ]]>
+</http:headers>
+<http:query-params>
+<![CDATA[ #[output application/java --- { "ID" : payload.SaleID }] ]]>
+</http:query-params>
+</http:request>
+<logger level="INFO" doc:name="Logger" doc:id="f622b2ee-d428-41cc-b061-3c231748d0f3" message="#[output application/java --- "Page Number : " ++ vars.currPage ++ " RowNumber : " ++ vars.counter ++ " SaleID : " ++ payload.SaleID]"/>
+<ee:transform doc:name="Transform Message" doc:id="aab6e20d-d1d0-4b12-a31f-19aec039d7af">
+<ee:message/>
+<ee:variables>
+<ee:set-variable variableName="orderDetails">
+<![CDATA[ %dw 2.0 output application/json --- vars.orderDetails + { SaleId: payload.SaleID, ResponseExtracted: vars.responsePayload } ]]>
+</ee:set-variable>
+</ee:variables>
+</ee:transform>
+<ee:transform doc:name="Transform Message" doc:id="39489bc5-9880-4888-9e39-168365cc1ab0">
+<ee:message>
+<ee:set-payload>
+<![CDATA[ %dw 2.0 import * from dw::Runtime output application/json --- { "user" : 1 } wait 1500 ]]>
+</ee:set-payload>
+</ee:message>
+</ee:transform>
+<error-handler>
+<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="5f0453ea-02c2-4dfb-a693-dbf8867059b8">
+<ee:transform doc:name="Transform Message" doc:id="2249207e-bda5-4059-8d69-810614407833">
+<ee:message/>
+<ee:variables>
+<ee:set-variable variableName="failedRecords">
+<![CDATA[ %dw 2.0 output application/json --- vars.failedRecords + { SaleId: payload.SaleID, ResponseExtracted: vars.responsePayload } ]]>
+</ee:set-variable>
+</ee:variables>
+</ee:transform>
+</on-error-continue>
+</error-handler>
+</try>
+</foreach>
+</when>
+</choice>
+</foreach>
+<ee:transform doc:name="Transform Message" doc:id="ac487405-2921-4431-b23d-faffebf27b81">
+<ee:message>
+<ee:set-payload>
+<![CDATA[ %dw 2.0 output application/json --- vars.orderDetails ]]>
+</ee:set-payload>
+</ee:message>
+</ee:transform>
+<file:write doc:name="Write" doc:id="2d65cb8f-3440-4895-bdd6-6c23cb5a2a53" config-ref="File_Config" path="C:\Users\vinot\OneDrive\Desktop\Abaco\test\response.txt">
+<file:content>
+<![CDATA[ #[output application/json --- payload] ]]>
+</file:content>
+</file:write>
+</flow>
+</mule>
